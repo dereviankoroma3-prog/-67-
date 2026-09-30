@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Темний чат</title>
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    background:#08080c;color:#e9e9f2;
+    display:flex;flex-direction:column;
+    height:100vh;height:100dvh;overflow:hidden;
+  }
+
+  /* ---------- HEADER ---------- */
+  header{
+    display:flex;align-items:center;gap:10px;
+    padding:12px 16px;border-bottom:1px solid #1e1e2c;
+    background:rgba(15,15,22,.92);backdrop-filter:blur(8px);
+    flex:0 0 auto;
+  }
+  header h1{font-size:15px;margin:0;font-weight:600;letter-spacing:.3px}
+  header .room{font-size:11px;color:#6b6b85}
+  #status{
+    margin-left:auto;font-size:11px;padding:4px 10px;border-radius:99px;
+    background:#2a2a38;color:#9a9ab0;white-space:nowrap;
+  }
+  #status[data-state="online"]{background:#12301e;color:#5ee08a}
+  #status[data-state="offline"]{background:#3a1a1a;color:#ff8a8a}
+
+  /* ---------- MESSAGES ---------- */
+  #messages{
+    flex:1 1 auto;overflow-y:auto;padding:14px 14px 8px;
+    display:flex;flex-direction:column;gap:9px;
+    -webkit-overflow-scrolling:touch;
+  }
+  #messages::-webkit-scrollbar{width:8px}
+  #messages::-webkit-scrollbar-thumb{background:#25253a;border-radius:8px}
+  .msg{
+    max-width:80%;padding:8px 12px;border-radius:14px;
+    background:#15151f;border:1px solid #1f1f2e;
+    align-self:flex-start;animation:pop .16s ease-out;
+  }
+  .msg.me{align-self:flex-end;background:#1d1733;border-color:#332a55}
+  .msg.sys{
+    align-self:center;background:transparent;border:0;
+    color:#6b6b85;font-size:12px;font-style:italic;max-width:100%;
+  }
+  .msg-head{display:flex;gap:8px;align-items:baseline;font-size:11px;margin-bottom:3px}
+  .msg .nick{font-weight:700}
+  .msg .time{color:#6b6b85}
+  .msg .body{font-size:14.5px;line-height:1.42;white-space:pre-wrap;word-break:break-word}
+  @keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  /* ---------- COMPOSER ---------- */
+  #composer{
+    display:flex;gap:8px;padding:10px 12px;
+    border-top:1px solid #1e1e2c;background:#0d0d14;flex:0 0 auto;
+  }
+  #input{
+    flex:1;padding:12px 14px;border-radius:12px;
+    border:1px solid #262636;background:#14141d;color:#e9e9f2;
+    font-size:16px;outline:none;font-family:inherit;
+  }
+  #input:focus{border-color:#4b3fa8}
+  button.send{
+    padding:0 18px;border-radius:12px;border:0;
+    background:linear-gradient(135deg,#6d4dff,#a24dff);
+    color:#fff;font-weight:600;font-size:15px;cursor:pointer;
+  }
+  button.send:active{transform:scale(.97)}
+
+  /* ---------- SCARE BUTTON ---------- */
+  #scareBtn{
+    position:fixed;right:12px;bottom:80px;z-index:60;
+    padding:10px 15px;border-radius:999px;
+    border:1px solid #4a1414;background:rgba(60,8,8,.85);
+    color:#ff9a9a;font-size:11px;font-weight:800;letter-spacing:.6px;
+    text-transform:uppercase;cursor:pointer;font-family:inherit;
+    animation:pulse 2.6s infinite;
+  }
+  @keyframes pulse{
+    0%{box-shadow:0 0 0 0 rgba(255,40,40,.45)}
+    70%{box-shadow:0 0 0 14px rgba(255,40,40,0)}
+    100%{box-shadow:0 0 0 0 rgba(255,40,40,0)}
+  }
+
+  /* ---------- SCARE OVERLAY ---------- */
+  #scare{
+    position:fixed;inset:0;z-index:9999;background:#000;
+    opacity:0;visibility:hidden;transition:opacity .2s linear;
+  }
+  #scare.on{
+    opacity:1;visibility:visible;
+    animation:shake .16s infinite;
+  }
+  #scare canvas{display:block;width:100%;height:100%}
+  @keyframes shake{
+    0%{transform:translate(0,0)}
+    25%{transform:translate(-5px,4px)}
+    50%{transform:translate(6px,-5px)}
+    75%{transform:translate(-4px,-4px)}
+    100%{transform:translate(5px,5px)}
+  }
+
+  /* ---------- NICK MODAL ---------- */
+  #nickModal{
+    position:fixed;inset:0;z-index:300;
+    background:rgba(5,5,10,.94);
+    display:flex;align-items:center;justify-content:center;
+  }
+  #nickModal.hide{display:none}
+  .card{
+    background:#14141d;border:1px solid #26263a;
+    padding:26px 22px;border-radius:18px;width:min(92vw,360px);text-align:center;
+  }
+  .card h2{margin:0 0 6px;font-size:18px}
+  .card p{margin:0 0 16px;font-size:13px;color:#8b8ba3}
+  .card input{
+    width:100%;padding:12px 14px;border-radius:12px;
+    border:1px solid #2a2a3e;background:#0e0e16;color:#e9e9f2;
+    font-size:16px;outline:none;margin-bottom:12px;font-family:inherit;
+  }
+  .card button{
+    width:100%;padding:12px;border-radius:12px;border:0;
+    background:linear-gradient(135deg,#6d4dff,#a24dff);
+    color:#fff;font-weight:700;font-size:15px;cursor:pointer;font-family:inherit;
+  }
+
+  /* ---------- AUDIO HINT ---------- */
+  #audioHint{
+    position:fixed;left:50%;top:12px;transform:translateX(-50%);
+    z-index:400;padding:8px 14px;border-radius:99px;
+    background:rgba(255,200,0,.12);border:1px solid rgba(255,200,0,.35);
+    color:#ffd766;font-size:12px;white-space:nowrap;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Темний чат</h1>
+  <span class="room" id="roomLabel"></span>
+  <span id="status" data-state="offline">з'єднання…</span>
+</header>
+
+<main id="messages"></main>
+
+<form id="composer" autocomplete="off">
+  <input id="input" type="text" placeholder="Напиши повідомлення…" maxlength="500" />
+  <button class="send" type="submit">➤</button>
+</form>
+
+<button id="scareBtn" type="button">Я ТІЛЬКИ 1</button>
+
+<div id="scare"><canvas id="scareCanvas"></canvas></div>
+
+<div id="nickModal" class="hide">
+  <div class="card">
+    <h2>Як тебе звати?</h2>
+    <p>Ім'я бачитимуть усі в чаті</p>
+    <input id="nickInput" type="text" maxlength="18" placeholder="Нікнейм" />
+    <button id="nickBtn" type="button">Увійти</button>
+  </div>
+</div>
+
+<div id="audioHint">🔊 Натисни будь-де, щоб увімкнути звук</div>
+
+<noscript>Потрібен JavaScript.</noscript>
+
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script>
+/* =========================================================
+   НАЛАШТУВАННЯ — міняй тут
+   ========================================================= */
+const CONFIG = {
+  // Публічний MQTT-брокер (працює без реєстрації)
+  brokerUrl: 'wss://broker.emqx.io:8084/mqtt',
+
+  // Назва "кімнати". ЗМІНИ ЇЇ на свою унікальну!
+  // Хто знає назву — той бачить чат.
+  room: new URLSearchParams(location.search).get('room') || 'dark-room-01',
+
+  // Якщо задати код — кнопку "Я ТІЛЬКИ 1" зможе натиснути лише той,
+  // хто введе цей код. Порожній рядок = може натиснути будь-хто.
+  ownerSecret: '',
+
+  // Тривалість переляку в мс
+  scareDuration: 4200,
+};
+
+const TOPIC_MSG   = `darkchat/${CONFIG.room}/msg`;
+const TOPIC_SCARE = `darkchat/${CONFIG.room}/scare`;
+
+/* =========================================================
+   УТИЛІТИ
+   ========================================================= */
+const $ = (s) => document.querySelector(s);
+const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+
+function colorFor(name) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360;
+  return `hsl(${h} 72% 66%)`;
+}
+function fmtTime(ts) {
+  const d = new Date(ts);
+  return d.getHours().toString().padStart(2, '0') + ':' +
+         d.getMinutes().toString().padStart(2, '0');
+}
+
+/* =========================================================
+   ЕЛЕМЕНТИ
+   ========================================================= */
+const els = {
+  messages: $('#messages'),
+  form: $('#composer'),
+  input: $('#input'),
+  status: $('#status'),
+  roomLabel: $('#roomLabel'),
+  scareBtn: $('#scareBtn'),
+  scare: $('#scare'),
+  canvas: $('#scareCanvas'),
+  nickModal: $('#nickModal'),
+  nickInput: $('#nickInput'),
+  nickBtn: $('#nickBtn'),
+  audioHint: $('#audioHint'),
+};
+els.roomLabel.textContent = '#' + CONFIG.room;
+
+/* =========================================================
+   НІКНЕЙМ
+   ========================================================= */
+let nick = localStorage.getItem('darkchat_nick') || '';
+
+function askNick() {
+  els.nickModal.classList.remove('hide');
+  els.nickInput.focus();
+}
+els.nickBtn.addEventListener('click', () => {
+  const v = els.nickInput.value.trim().slice(0, 18);
+  if (!v) return;
+  nick = v;
+  localStorage.setItem('darkchat_nick', nick);
+  els.nickModal.classList.add('hide');
+  els.input.focus();
+});
+els.nickInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') els.nickBtn.click();
+});
+
+if (!nick) askNick();
+
+/* =========================================================
+   ВІДОБРАЖЕННЯ ПОВІДОМЛЕНЬ
+   ========================================================= */
+const seenMsg = new Set();
+
+function nearBottom() {
+  return els.messages.scrollHeight - els.messages.scrollTop - els.messages.clientHeight < 120;
+}
+function scrollDown(force) {
+  if (force || nearBottom()) {
+    els.messages.scrollTop = els.messages.scrollHeight;
+  }
+}
+
+function addMessage(m) {
+  if (!m || typeof m.text !== 'string') return;
+  if (m.id && seenMsg.has(m.id)) return;
+  if (m.id) {
+    seenMsg.add(m.id);
+    if (seenMsg.size > 800) seenMsg.clear();
+  }
+
+  const wrap = document.createElement('div');
+  wrap.className = 'msg' + (m.nick === nick ? ' me' : '');
+
+  const head = document.createElement('div');
+  head.className = 'msg-head';
+
+  const nameEl = document.createElement('span');
+  nameEl.className = 'nick';
+  nameEl.textContent = m.nick || '???';
+  nameEl.style.color = colorFor(m.nick || '?');
+
+  const timeEl = document.createElement('span');
+  timeEl.className = 'time';
+  timeEl.textContent = fmtTime(m.ts || Date.now());
+
+  head.append(nameEl, timeEl);
+
+  const body = document.createElement('div');
+  body.className = 'body';
+  body.textContent = m.text;
+
+  wrap.append(head, body);
+  els.messages.append(wrap);
+  scrollDown(false);
+}
+
+function addSystem(text) {
+  const d = document.createElement('div');
+  d.className = 'msg sys';
+  d.textContent = text;
+  els.messages.append(d);
+  scrollDown(true);
+}
+
+/* =========================================================
+   MQTT
+   ========================================================= */
+let client = null;
+const seenScare = new Set();
+
+function setStatus(state, text) {
+  els.status.dataset.state = state;
+  els.status.textContent = text;
+}
+
+function connect() {
+  setStatus('offline', 'з\'єднання…');
+
+  client = mqtt.connect(CONFIG.brokerUrl, {
+    clientId: 'darkchat_' + Math.random().toString(16).slice(2, 10),
+    clean: true,
+    connectTimeout: 9000,
+    reconnectPeriod: 3000,
+    keepalive: 30,
+  });
+
+  client.on('connect', () => {
+    setStatus('online', 'онлайн');
+    client.subscribe([TOPIC_MSG, TOPIC_SCARE], { qos: 0 }, (err) => {
+      if (err) console.error('subscribe error', err);
+    });
+  });
+
+  client.on('reconnect', () => setStatus('offline', 'перепідключення…'));
+  client.on('close',     () => setStatus('offline', 'офлайн'));
+  client.on('error', (e) => { console.error(e); setStatus('offline', 'помилка'); });
+
+  client.on('message', (topic, payload) => {
+    let data;
+    try { data = JSON.parse(payload.toString()); } catch { return; }
+
+    if (topic === TOPIC_MSG) {
+      addMessage(data);
+    } else if (topic === TOPIC_SCARE) {
+      if (data.id && seenScare.has(data.id)) return;
+      if (data.id) {
+        seenScare.add(data.id);
+        if (seenScare.size > 200) seenScare.clear();
+      }
+      runScare();
+    }
+  });
+}
+
+/* =========================================================
+   НАДСИЛАННЯ
+   ========================================================= */
+els.form.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const text = els.input.value.trim();
+  if (!text) return;
+
+  if (!nick) { askNick(); return; }
+
+  if (client && client.connected) {
+    client.publish(TOPIC_MSG, JSON.stringify({
+      id: uid(), nick, text, ts: Date.now()
+    }), { qos: 0 });
+  } else {
+    addSystem('Немає з\'єднання з сервером…');
+  }
+  els.input.value = '';
+  els.input.focus();
+});
+
+/* =========================================================
+   ЗВУК
+   ========================================================= */
+let audioCtx = null;
+
+function getAudioCtx() {
+  if (!audioCtx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    audioCtx = new AC();
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+function makeDistortionCurve(amount) {
+  const n = 1024;
+  const curve = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const x = (i * 2) / n - 1;
+    curve[i] = ((3 + amount) * x * 20 * Math.PI / 180) /
+               (Math.PI + amount * Math.abs(x));
+  }
+  return curve;
+}
+
+function playScareSound() {
+  const ac = getAudioCtx();
+  if (ac.state === 'suspended') ac.resume();
+
+  const t0 = ac.currentTime + 0.02;
+
+  const master = ac.createGain();
+  master.gain.setValueAtTime(0.0001, t0);
+  master.gain.exponentialRampToValueAtTime(0.9, t0 + 0.04);
+  master.gain.exponentialRampToValueAtTime(0.5, t0 + 1.0);
+  master.gain.exponentialRampToValueAtTime(0.0001, t0 + 3.2);
+
+  const comp = ac.createDynamicsCompressor();
+  comp.threshold.value = -18;
+  comp.ratio.value = 12;
+  master.connect(comp);
+  comp.connect(ac.destination);
+
+  const shaper = ac.createWaveShaper();
+  shaper.curve = makeDistortionCurve(80);
+  shaper.oversample = '2x';
+  shaper.connect(master);
+
+  // 1) Вереск — детюнені квадрати
+  [1850, 2470, 3120, 720].forEach((f, i) => {
+    const osc = ac.createOscillator();
+    osc.type = i === 3 ? 'sawtooth' : 'square';
+    osc.frequency.setValueAtTime(f, t0);
+    osc.frequency.exponentialRampToValueAtTime(f * 0.32, t0 + 2.8);
+
+    const lfo = ac.createOscillator();
+    lfo.type = 'sine';
+    lfo.frequency.setValueAtTime(13 + i * 5, t0);
+    lfo.frequency.linearRampToValueAtTime(30 + i * 7, t0 + 2.5);
+    const lfoGain = ac.createGain();
+    lfoGain.gain.value = f * 0.09;
+    lfo.connect(lfoGain);
+    lfoGain.connect(osc.frequency);
+
+    const g = ac.createGain();
+    g.gain.value = 0.22 / (i + 1);
+
+    osc.connect(g);
+    g.connect(shaper);
+
+    osc.start(t0); osc.stop(t0 + 3.3);
+    lfo.start(t0); lfo.stop(t0 + 3.3);
+  });
+
+  // 2) Шум — "крик/перешкоди"
+  const nb = ac.createBuffer(1, Math.floor(ac.sampleRate * 3.4), ac.sampleRate);
+  const nd = nb.getChannelData(0);
+  for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+
+  const noise = ac.createBufferSource();
+  noise.buffer = nb;
+
+  const bp = ac.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.Q.value = 1.1;
+  bp.frequency.setValueAtTime(300, t0);
+  bp.frequency.exponentialRampToValueAtTime(5200, t0 + 0.5);
+  bp.frequency.exponentialRampToValueAtTime(180, t0 + 3.0);
+
+  const ng = ac.createGain();
+  ng.gain.setValueAtTime(0.7, t0);
+  ng.gain.exponentialRampToValueAtTime(0.15, t0 + 3.0);
+
+  noise.connect(bp); bp.connect(ng); ng.connect(master);
+  noise.start(t0); noise.stop(t0 + 3.3);
+
+  // 3) Саб-гул
+  const sub = ac.createOscillator();
+  sub.type = 'sine';
+  sub.frequency.setValueAtTime(46, t0);
+  sub.frequency.exponentialRampToValueAtTime(24, t0 + 3.0);
+  const sg = ac.createGain();
+  sg.gain.value = 0.55;
+  sub.connect(sg); sg.connect(master);
+  sub.start(t0); sub.stop(t0 + 3.3);
+}
+
+/* ---- розблокування звуку (браузери блокують автоплей) ---- */
+function unlockAudio() {
+  try { getAudioCtx(); } catch (e) {}
+  els.audioHint.style.display = 'none';
+  window.removeEventListener('pointerdown', unlockAudio);
+  window.removeEventListener('keydown', unlockAudio);
+  window.removeEventListener('touchstart', unlockAudio);
+}
+window.addEventListener('pointerdown', unlockAudio);
+window.addEventListener('keydown', unlockAudio);
+window.addEventListener('touchstart', unlockAudio);
+
+/* =========================================================
+   СТРАШНА КАРТИНКА (малюється на canvas)
+   ========================================================= */
+const ctx2d = els.canvas.getContext('2d');
+
+/* тайл шуму */
+const noiseTile = (() => {
+  const c = document.createElement('canvas');
+  c.width = c.height = 160;
+  const x = c.getContext('2d');
+  const img = x.createImageData(160, 160);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const v = Math.random() * 255;
+    img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
+    img.data[i + 3] = 255;
+  }
+  x.putImageData(img, 0, 0);
+  return c;
+})();
+
+function resizeCanvas() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  els.canvas.width = Math.floor(w * dpr);
+  els.canvas.height = Math.floor(h * dpr);
+  els.canvas.style.width = w + 'px';
+  els.canvas.style.height = h + 'px';
+}
+
+function drawFace(t, p) {
+  const cv = els.canvas;
+  const ctx = ctx2d;
+  const w = cv.width, h = cv.height;
+  const S = Math.min(w, h);
+
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, w, h);
+
+  /* ---- зум + тремтіння ---- */
+  const zoom = 1 + p * 0.55;
+  const shx = (Math.random() - 0.5) * S * 0.02 * (0.4 + p);
+  const shy = (Math.random() - 0.5) * S * 0.02 * (0.4 + p);
+
+  ctx.save();
+  ctx.translate(w / 2 + shx, h / 2 + shy);
+  ctx.scale(zoom, zoom);
+  ctx.translate(-w / 2, -h / 2);
+
+  const cx = w / 2;
+  const cy = h / 2;
+  const R = S * 0.30;
+  const faceW = R * 0.82;
+  const faceH = R * 1.06;
+
+  /* ---- червоне світіння навколо ---- */
+  const glow = ctx.createRadialGradient(cx, cy, R * 0.2, cx, cy, R * 2.4);
+  glow.addColorStop(0, 'rgba(110,15,15,0.40)');
+  glow.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, w, h);
+
+  /* ---- обличчя ---- */
+  const g = ctx.createRadialGradient(
+    cx - faceW * 0.2, cy - faceH * 0.35, R * 0.08,
+    cx, cy, faceH * 1.05
+  );
+  g.addColorStop(0.00, '#ded8ce');
+  g.addColorStop(0.45, '#9d948a');
+  g.addColorStop(0.80, '#4a443d');
+  g.addColorStop(1.00, '#100e0c');
+
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, faceW, faceH, 0, 0, Math.PI * 2);
+  ctx.fillStyle = g;
+  ctx.fill();
+
+  /* ---- тріщини ---- */
+  ctx.strokeStyle = 'rgba(20,10,8,0.55)';
+  ctx.lineWidth = R * 0.012;
+  for (let i = 0; i < 7; i++) {
+    let x = cx + (Math.random() - 0.5) * faceW * 1.5;
+    let y = cy + (Math.random() - 0.5) * faceH * 1.5;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    for (let k = 0; k < 4; k++) {
+      x += (Math.random() - 0.5) * R * 0.3;
+      y += (Math.random() - 0.3) * R * 0.3;
+      ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+
+  /* ---- очі ---- */
+  const eyeY = cy - faceH * 0.20;
+  const eyeDX = faceW * 0.44;
+  const eyeRX = faceW * 0.30;
+  const eyeRY = faceH * 0.16;
+
+  for (const s of [-1, 1]) {
+    const ex = cx + s * eyeDX;
+
+    // очна ямка
+    const sg = ctx.createRadialGradient(ex, eyeY, 1, ex, eyeY, eyeRX * 1.35);
+    sg.addColorStop(0, '#000');
+    sg.addColorStop(0.65, '#0a0705');
+    sg.addColorStop(1, 'rgba(20,14,10,0)');
+    ctx.beginPath();
+    ctx.ellipse(ex, eyeY, eyeRX * 1.3, eyeRY * 1.45, 0, 0, Math.PI * 2);
+    ctx.fillStyle = sg;
+    ctx.fill();
+
+    // зіниця, що блимає
+    const px = ex + (Math.random() - 0.5) * eyeRX * 0.55;
+    const py = eyeY + (Math.random() - 0.5) * eyeRY * 0.55;
+    const pr = eyeRX * 0.34;
+
+    const pg = ctx.createRadialGradient(px, py, 0, px, py, pr * 2);
+    pg.addColorStop(0, 'rgba(255,245,225,0.98)');
+    pg.addColorStop(0.30, 'rgba(230,60,25,0.55)');
+    pg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.beginPath();
+    ctx.arc(px, py, pr * 2, 0, Math.PI * 2);
+    ctx.fillStyle = pg;
+    ctx.fill();
+
+    // криваві патьоки
+    ctx.strokeStyle = 'rgba(130,0,0,0.75)';
+    ctx.lineWidth = R * 0.022;
+    for (let i = 0; i < 2; i++) {
+      const bx = ex + (Math.random() - 0.5) * eyeRX * 0.8;
+      const by = eyeY + eyeRY * 0.9;
+      ctx.beginPath();
+      ctx.moveTo(bx, by);
+      ctx.lineTo(bx + (Math.random() - 0.5) * R * 0.08,
+                 by + faceH * (0.20 + Math.random() * 0.45));
+      ctx.stroke();
+    }
+  }
+
+  /* ---- ніс ---- */
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - faceH * 0.02);
+  ctx.lineTo(cx - faceW * 0.10, cy + faceH * 0.20);
+  ctx.lineTo(cx + faceW * 0.10, cy + faceH * 0.20);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(25,18,14,0.45)';
+  ctx.fill();
+
+  /* ---- рот ---- */
+  const mouthY = cy + faceH * 0.50;
+  const mouthW = faceW * 0.62;
+  const mouthH = faceH * 0.30;
+
+  const mg = ctx.createRadialGradient(cx, mouthY, 1, cx, mouthY, mouthH * 1.6);
+  mg.addColorStop(0, '#000');
+  mg.addColorStop(1, '#130404');
+  ctx.beginPath();
+  ctx.ellipse(cx, mouthY, mouthW, mouthH, 0, 0, Math.PI * 2);
+  ctx.fillStyle = mg;
+  ctx.fill();
+
+  // зуби
+  ctx.fillStyle = '#d2c9b7';
+  for (let i = -3; i <= 3; i++) {
+    const tx = cx + i * mouthW * 0.26;
+    const tw = mouthW * 0.11;
+
+    ctx.beginPath();
+    ctx.moveTo(tx - tw, mouthY - mouthH * 0.98);
+    ctx.lineTo(tx + tw, mouthY - mouthH * 0.98);
+    ctx.lineTo(tx + (Math.random() - 0.5) * 7,
+               mouthY - mouthH * (0.25 + Math.random() * 0.35));
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(tx - tw, mouthY + mouthH * 0.98);
+    ctx.lineTo(tx + tw, mouthY + mouthH * 0.98);
+    ctx.lineTo(tx + (Math.random() - 0.5) * 7,
+               mouthY + mouthH * (0.25 + Math.random() * 0.35));
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  ctx.restore();
+
+  /* ---- глітч-смуги ---- */
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  const slices = 5 + Math.floor(p * 9);
+  for (let i = 0; i < slices; i++) {
+    const sy = Math.random() * h;
+    const sh = (0.008 + Math.random() * 0.05) * h;
+    const dx = (Math.random() - 0.5) * S * 0.12 * (0.3 + p);
+    try {
+      ctx.drawImage(cv, 0, sy, w, sh, dx, sy, w, sh);
+    } catch (e) {}
+  }
+
+  /* ---- зерно ---- */
+  ctx.globalAlpha = 0.10 + Math.random() * 0.12;
+  ctx.globalCompositeOperation = 'overlay';
+  const pat = ctx.createPattern(noiseTile, 'repeat');
+  if (pat) {
+    ctx.save();
+    ctx.translate(-Math.random() * 160, -Math.random() * 160);
+    ctx.fillStyle = pat;
+    ctx.fillRect(0, 0, w + 160, h + 160);
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
+
+  /* ---- червоний спалах ---- */
+  if (Math.random() < 0.14) {
+    ctx.fillStyle = 'rgba(140,0,0,0.20)';
+    ctx.fillRect(0, 0, w, h);
+  }
+
+  /* ---- вінʼєтка ---- */
+  const vg = ctx.createRadialGradient(w / 2, h / 2, S * 0.12, w / 2, h / 2, S * 0.78);
+  vg.addColorStop(0, 'rgba(0,0,0,0)');
+  vg.addColorStop(1, 'rgba(0,0,0,0.96)');
+  ctx.fillStyle = vg;
+  ctx.fillRect(0, 0, w, h);
+}
+
+/* =========================================================
+   ЗАПУСК ПЕРЕЛЯКУ
+   ========================================================= */
+let scareActive = false;
+let scareToken = 0;
+
+function runScare() {
+  if (scareActive) return;
+  scareActive = true;
+
+  const myToken = ++scareToken;
+  const el = els.scare;
+
+  el.classList.add('on');
+  resizeCanvas();
+
+  try { playScareSound(); } catch (e) { console.warn(e); }
+
+  if (navigator.vibrate) {
+    try { navigator.vibrate([400, 80, 400, 80, 700]); } catch (e) {}
+  }
+
+  const start = performance.now();
+  const dur = CONFIG.scareDuration;
+  let ended = false;
+
+  function end() {
+    if (ended || myToken !== scareToken) return;
+    ended = true;
+    el.classList.remove('on');
+    scareActive = false;
+  }
+
+  function frame(now) {
+    if (myToken !== scareToken) return;
+    const t = now - start;
+    const p = clamp(t / dur, 0, 1);
+    drawFace(t, p);
+    if (t < dur) {
+      requestAnimationFrame(frame);
+    } else {
+      end();
+    }
+  }
+  requestAnimationFrame(frame);
+
+  // страховка
+  setTimeout(end, dur + 3000);
+}
+
+window.addEventListener('resize', () => {
+  if (scareActive) resizeCanvas();
+});
+
+/* =========================================================
+   КНОПКА "Я ТІЛЬКИ 1"
+   ========================================================= */
+els.scareBtn.addEventListener('click', () => {
+  if (CONFIG.ownerSecret) {
+    const code = prompt('Введи код:');
+    if (code !== CONFIG.ownerSecret) return;
+  }
+
+  const id = uid();
+  seenScare.add(id);
+
+  if (client && client.connected) {
+    client.publish(TOPIC_SCARE, JSON.stringify({
+      id, nick: nick || '???', ts: Date.now()
+    }), { qos: 0 });
+  } else {
+    addSystem('Немає з\'єднання — ефект лише у тебе');
+  }
+
+  runScare();
+});
+
+/* =========================================================
+   СТАРТ
+   ========================================================= */
+connect();
+addSystem('Вітаю в темному чаті. Кімната: #' + CONFIG.room);
+
+window.addEventListener('beforeunload', () => {
+  try { client && client.end(true); } catch (e) {}
+});
+</script>
+</body>
+</html>
